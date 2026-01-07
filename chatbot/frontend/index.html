@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Price Query</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Stock Price Query</h1>
+      <p class="subtitle">Ask questions about stock prices</p>
+    </header>
+
+    <div class="chat-container">
+      <div class="chat-messages" id="chatMessages">
+        <div class="welcome-message">
+          <p class="welcome-text">Ask me anything about stock prices. I can help you find the latest prices, historical data, and more.</p>
+          <div class="examples">
+            <p class="examples-title">Examples</p>
+            <button class="example-btn" onclick="fillExample('What is the latest price of MSFT?')">
+              What is the latest price of MSFT?
+            </button>
+            <button class="example-btn" onclick="fillExample('Show me the price of AAPL')">
+              Show me the price of AAPL
+            </button>
+            <button class="example-btn" onclick="fillExample('What companies are in the database?')">
+              What companies are in the database?
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-container">
+        <div class="input-wrapper">
+          <input 
+            type="text" 
+            id="questionInput" 
+            placeholder="Type your question..."
+            autocomplete="off"
+          />
+          <button id="sendButton" onclick="ask()" class="send-button" title="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

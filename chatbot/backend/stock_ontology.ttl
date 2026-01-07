@@ -1,0 +1,85 @@
+@prefix : <http://kg-demo.org/stock#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:Company a owl:Class ;
+    rdfs:label "Company" ;
+    rdfs:comment "A publicly traded company" .
+
+:PriceDay a owl:Class ;
+    rdfs:label "Price Day" ;
+    rdfs:comment "A trading day with price data" .
+
+:Year a owl:Class ;
+    rdfs:label "Year" .
+
+:Quarter a owl:Class ;
+    rdfs:label "Quarter" .
+
+:Month a owl:Class ;
+    rdfs:label "Month" .
+
+:symbol a owl:DatatypeProperty ;
+    rdfs:domain :Company ;
+    rdfs:range xsd:string .
+
+:date a owl:DatatypeProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range xsd:date .
+
+:open a owl:DatatypeProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range xsd:float .
+
+:high a owl:DatatypeProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range xsd:float .
+
+:low a owl:DatatypeProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range xsd:float .
+
+:close a owl:DatatypeProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range xsd:float .
+
+:adj_close a owl:DatatypeProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range xsd:float .
+
+:volume a owl:DatatypeProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range xsd:integer .
+
+:year a owl:DatatypeProperty ;
+    rdfs:domain :Year ;
+    rdfs:range xsd:integer .
+
+:hasPrice a owl:ObjectProperty ;
+    rdfs:domain :Company ;
+    rdfs:range :PriceDay ;
+    rdfs:label "Has Price" .
+
+:correlatedWith a owl:ObjectProperty ;
+    rdfs:domain :Company ;
+    rdfs:range :Company ;
+    rdfs:label "Correlated With" .
+
+:performedIn a owl:ObjectProperty ;
+    rdfs:domain :Company ;
+    rdfs:range :Year ;
+    rdfs:label "Performed In" .
+
+:inYear a owl:ObjectProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range :Year .
+
+:inQuarter a owl:ObjectProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range :Quarter .
+
+:inMonth a owl:ObjectProperty ;
+    rdfs:domain :PriceDay ;
+    rdfs:range :Month .

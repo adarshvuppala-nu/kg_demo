@@ -1,0 +1,27 @@
+[PrefixDeclaration]
+:	http://kg-demo.org/stock#
+rdf:	http://www.w3.org/1999/02/22-rdf-syntax-ns#
+rdfs:	http://www.w3.org/2000/01/rdf-schema#
+owl:	http://www.w3.org/2002/07/owl#
+xsd:	http://www.w3.org/2001/XMLSchema#
+
+[MappingDeclaration] @collection [[
+
+mappingId	stock_prices_company
+target		:Company_{symbol} a :Company ; :symbol "{symbol}"^^xsd:string .
+source		SELECT symbol FROM stock_prices GROUP BY symbol
+
+mappingId	stock_prices_priceday
+target		:PriceDay_{date}_{symbol} a :PriceDay ;
+			:date "{date}"^^xsd:date ;
+			:open {open}^^xsd:float ;
+			:high {high}^^xsd:float ;
+			:low {low}^^xsd:float ;
+			:close {close}^^xsd:float ;
+			:adj_close {adj_close}^^xsd:float ;
+			:volume {volume}^^xsd:integer ;
+			:hasCompany :Company_{symbol} .
+source		SELECT "date", open, high, low, close, adj_close, volume, symbol 
+			FROM stock_prices
+
+]]
