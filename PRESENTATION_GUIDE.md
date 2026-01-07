@@ -445,3 +445,124 @@ cd chatbot/backend
 
 Good luck with your presentation! 🎉
 
+---
+
+## 📁 Repository File Reference
+
+### Root Directory Files
+
+**README.md** - Main project documentation with overview, setup instructions, and quick start guide
+
+**PROJECT_DOCUMENTATION.md** - Complete technical documentation covering architecture, data pipeline, Neo4j schema, GDS, GraphRAG implementation, and all components
+
+**PRESENTATION_GUIDE.md** - This file: conversation script, demo queries, and presentation tips
+
+**MANUAL_COMMANDS.md** - Step-by-step manual commands for starting/stopping services and troubleshooting
+
+**START_COMMANDS.md** - Detailed command reference for all services with verification steps
+
+**start_all.sh** - Automated script to start all services (Docker, backend, frontend, Ontop)
+
+**stop_all.sh** - Automated script to stop all services and clear ports
+
+**setup_docker_containers.sh** - Script to create and configure Docker containers for PostgreSQL and Neo4j
+
+**.gitignore** - Git ignore rules to exclude venv, node_modules, logs, and other unnecessary files
+
+---
+
+### Data Pipeline (`rawdata_cleanupscripts/`)
+
+**download_prices_clean.py** - Downloads stock price data from Yahoo Finance, cleans it, and outputs long-format CSV
+
+**stock_prices_pg.csv** - Clean stock price data in long format (date, open, high, low, close, adj_close, volume, symbol)
+
+---
+
+### Backend (`chatbot/backend/`)
+
+**app.py** - Main FastAPI application that handles chat requests, intent classification, Cypher generation, and answer synthesis
+
+**graph.py** - Neo4j database connection and query execution functions with connection pooling
+
+**llm.py** - OpenAI integration for Cypher query generation and natural language answer synthesis
+
+**prompts.py** - Schema-safe prompt templates for LLM to generate valid Cypher queries and format answers
+
+**intent_classifier.py** - Classifies user questions as data queries, conversational, clarification, or confirmation
+
+**load_data_to_neo4j.py** - Loads stock price CSV data into Neo4j, creating Company and PriceDay nodes with HAS_PRICE relationships
+
+**load_schema_extension.py** - Extends Neo4j schema by creating time dimension nodes (Year, Quarter, Month) and derived relationships (PERFORMED_IN, CORRELATED_WITH)
+
+**gds_setup.py** - Sets up Graph Data Science algorithms: Node Similarity, PageRank, Community Detection, and FastRP Embeddings
+
+**gds_setup.cypher** - Cypher script with all GDS algorithm definitions and verification queries
+
+**schema_extension.cypher** - Cypher script defining extended schema with time dimensions and derived relationships
+
+**test_gds_insights.py** - Test script to verify GDS outputs and how they improve GraphRAG answers
+
+**import_n10s_ontology.py** - Imports RDF/OWL ontology into Neo4j using n10s plugin and maps existing nodes
+
+**install_gds_docker.sh** - Installs Neo4j Graph Data Science plugin into Docker container
+
+**install_n10s_docker.sh** - Installs n10s (neosemantics) RDF/OWL plugin into Neo4j Docker container
+
+**setup_ontop_from_zip.sh** - Helper script to extract and set up Ontop CLI from downloaded ZIP file
+
+**start_ontop.sh** - Starts Ontop Virtual Knowledge Graph endpoint for SPARQL queries over PostgreSQL
+
+**stock_ontology.ttl** - RDF/OWL ontology file for n10s plugin defining stock data concepts
+
+**stock_ontology_ontop.owl** - OWL ontology file for Ontop Virtual Knowledge Graph
+
+**stock_mapping.obda** - OBDA mapping file that maps PostgreSQL stock_prices table to RDF/OWL concepts for Ontop
+
+**stock_ontop.properties** - Properties file for Ontop with PostgreSQL connection details and file paths
+
+**requirements.txt** - Python dependencies list (neo4j, fastapi, openai, pandas, etc.)
+
+---
+
+### Frontend (`chatbot/frontend/`)
+
+**index.html** - Main HTML structure for the chatbot interface with welcome message and example questions
+
+**app.js** - JavaScript code that handles user input, API calls to backend, message display, and conversation context
+
+**style.css** - CSS styling for the chatbot interface with dark theme and responsive design
+
+**package.json** - Package configuration with start script to run simple HTTP server on port 3001
+
+---
+
+### Quick File Purpose Summary
+
+**Core Application:**
+- `app.py` - Main API server
+- `graph.py` - Database connection
+- `llm.py` - AI integration
+- `prompts.py` - Query generation prompts
+
+**Data Loading:**
+- `load_data_to_neo4j.py` - Initial data load
+- `load_schema_extension.py` - Schema enrichment
+- `gds_setup.py` - Graph analytics setup
+
+**Frontend:**
+- `index.html` - UI structure
+- `app.js` - Frontend logic
+- `style.css` - Styling
+
+**Documentation:**
+- `README.md` - Quick start
+- `PROJECT_DOCUMENTATION.md` - Full technical docs
+- `PRESENTATION_GUIDE.md` - Presentation script
+- `MANUAL_COMMANDS.md` - Command reference
+
+**Setup Scripts:**
+- `start_all.sh` - Start everything
+- `stop_all.sh` - Stop everything
+- `setup_docker_containers.sh` - Docker setup
+
