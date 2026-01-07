@@ -16,7 +16,7 @@ cd "$SCRIPT_DIR"
 # Step 1: Stop any existing services
 echo "📋 Step 1: Stopping existing services..."
 lsof -ti :8000 | xargs kill -9 2>/dev/null || true
-lsof -ti :3000 | xargs kill -9 2>/dev/null || true
+lsof -ti :3001 | xargs kill -9 2>/dev/null || true
 lsof -ti :8081 | xargs kill -9 2>/dev/null || true
 lsof -ti :7687 | xargs kill -9 2>/dev/null || true
 sleep 2
@@ -25,11 +25,50 @@ echo ""
 
 # Step 2: Start Docker containers
 echo "📋 Step 2: Starting Docker containers..."
-docker start postgres-local-snp neo4j-local 2>/dev/null || {
-    echo "⚠️  Containers not found. Please ensure they exist:"
-    echo "   docker ps -a | grep -E '(postgres|neo4j)'"
+
+# Check if Docker is accessible
+if ! docker ps > /dev/null 2>&1; then
+    echo "❌ Docker is not accessible. Please ensure Docker Desktop is running."
     exit 1
-}
+fi
+
+# Check if containers are running
+RUNNING_CONTAINERS=$(docker ps --format "{{.Names}}" 2>/dev/null)
+NEO4J_RUNNING=false
+POSTGRES_RUNNING=false
+
+if echo "$RUNNING_CONTAINERS" | grep -q "neo4j-local"; then
+    NEO4J_RUNNING=true
+fi
+if echo "$RUNNING_CONTAINERS" | grep -q "postgres-local-snp"; then
+    POSTGRES_RUNNING=true
+fi
+
+if [ "$NEO4J_RUNNING" = true ] && [ "$POSTGRES_RUNNING" = true ]; then
+    echo "✅ Containers are already running"
+elif [ "$NEO4J_RUNNING" = true ] || [ "$POSTGRES_RUNNING" = true ]; then
+    echo "⚠️  Some containers are running, starting the rest..."
+    if [ "$NEO4J_RUNNING" = false ]; then
+        docker start neo4j-local 2>/dev/null && echo "   ✅ Started neo4j-local" || echo "   ⚠️  neo4j-local not found or already running"
+    fi
+    if [ "$POSTGRES_RUNNING" = false ]; then
+        docker start postgres-local-snp 2>/dev/null && echo "   ✅ Started postgres-local-snp" || echo "   ⚠️  postgres-local-snp not found or already running"
+    fi
+else
+    echo "⚠️  Containers not running. Attempting to start..."
+    if docker start postgres-local-snp neo4j-local 2>/dev/null; then
+        echo "✅ Containers started"
+    else
+        echo "⚠️  Could not start containers. They may not exist."
+        echo "   Running setup script to create them..."
+        if [ -f "$SCRIPT_DIR/setup_docker_containers.sh" ]; then
+            "$SCRIPT_DIR/setup_docker_containers.sh"
+        else
+            echo "❌ Setup script not found. Please run: ./setup_docker_containers.sh"
+            exit 1
+        fi
+    fi
+fi
 
 echo "⏳ Waiting for containers to be ready..."
 sleep 5
@@ -83,7 +122,7 @@ fi
 echo ""
 
 # Step 4: Start Frontend (if needed)
-echo "📋 Step 4: Starting Frontend (on port 3000)..."
+echo "📋 Step 4: Starting Frontend (on port 3001)..."
 cd "$SCRIPT_DIR/chatbot/frontend"
 
 # Check if we need to install dependencies
@@ -102,8 +141,8 @@ echo "   Frontend PID: $FRONTEND_PID"
 sleep 5
 
 # Check if frontend is running
-if curl -s http://localhost:3000 > /dev/null 2>&1; then
-    echo "✅ Frontend is running at http://localhost:3000"
+if curl -s http://localhost:3001 > /dev/null 2>&1; then
+    echo "✅ Frontend is running at http://localhost:3001"
 else
     echo "⚠️  Frontend may still be starting. Check logs: tail -f /tmp/frontend.log"
 fi
@@ -137,7 +176,7 @@ echo "📍 Services:"
 echo "   • PostgreSQL:  localhost:5434"
 echo "   • Neo4j:      http://localhost:7474 (Browser)"
 echo "   • Backend:    http://localhost:8000"
-echo "   • Frontend:   http://localhost:3000"
+echo "   • Frontend:   http://localhost:3001"
 echo "   • Ontop:      http://localhost:8081/sparql (if started)"
 echo ""
 echo "📋 Process IDs (for stopping later):"

@@ -71,7 +71,7 @@ cd /Users/adarshvuppala/kg_demo
 #### Stop processes on ports
 ```bash
 lsof -ti :8000 | xargs kill -9  # Backend
-lsof -ti :3000 | xargs kill -9  # Frontend
+lsof -ti :3001 | xargs kill -9  # Frontend
 lsof -ti :8081 | xargs kill -9  # Ontop
 ```
 
@@ -87,7 +87,7 @@ docker stop postgres-local-snp neo4j-local
 - **PostgreSQL**: `localhost:5434`
 - **Neo4j Browser**: `http://localhost:7474`
 - **Backend API**: `http://localhost:8000`
-- **Frontend**: `http://localhost:3000`
+- **Frontend**: `http://localhost:3001`
 - **Ontop SPARQL**: `http://localhost:8081/sparql`
 
 ---
@@ -102,7 +102,7 @@ docker ps | grep -E "(postgres|neo4j)"
 ### Check ports
 ```bash
 lsof -i :8000  # Backend
-lsof -i :3000   # Frontend
+lsof -i :3001   # Frontend
 lsof -i :8081   # Ontop
 lsof -i :5434   # PostgreSQL
 lsof -i :7474   # Neo4j HTTP
@@ -112,7 +112,7 @@ lsof -i :7687   # Neo4j Bolt
 ### Test endpoints
 ```bash
 curl http://localhost:8000/              # Backend health
-curl http://localhost:3000               # Frontend
+curl http://localhost:3001               # Frontend
 curl http://localhost:8081/sparql       # Ontop
 ```
 

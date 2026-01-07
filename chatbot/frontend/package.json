@@ -1,0 +1,14 @@
+{
+  "name": "graphrag-chatbot-frontend",
+  "version": "1.0.0",
+  "description": "Simple HTML/CSS/JS frontend for GraphRAG chatbot",
+  "scripts": {
+    "start": "python3 -m http.server 3001",
+    "serve": "python3 -m http.server 3001",
+    "dev": "python3 -m http.server 3001"
+  },
+  "keywords": ["graphrag", "chatbot"],
+  "author": "",
+  "license": "ISC"
+}
+

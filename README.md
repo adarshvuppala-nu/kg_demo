@@ -131,7 +131,7 @@ npm start
 
 ### 5. Access Services
 
-- **Frontend**: http://localhost:3000
+- **Frontend**: http://localhost:3001
 - **Backend API**: http://localhost:8000
 - **Neo4j Browser**: http://localhost:7474
 - **PostgreSQL**: localhost:5434

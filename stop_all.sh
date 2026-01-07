@@ -9,7 +9,7 @@ echo ""
 # Stop processes on ports
 echo "📋 Stopping services on ports..."
 lsof -ti :8000 | xargs kill -9 2>/dev/null && echo "✅ Backend stopped (port 8000)" || echo "⚠️  No process on port 8000"
-lsof -ti :3000 | xargs kill -9 2>/dev/null && echo "✅ Frontend stopped (port 3000)" || echo "⚠️  No process on port 3000"
+lsof -ti :3001 | xargs kill -9 2>/dev/null && echo "✅ Frontend stopped (port 3001)" || echo "⚠️  No process on port 3001"
 lsof -ti :8081 | xargs kill -9 2>/dev/null && echo "✅ Ontop stopped (port 8081)" || echo "⚠️  No process on port 8081"
 lsof -ti :7687 | xargs kill -9 2>/dev/null && echo "✅ Neo4j client stopped (port 7687)" || echo "⚠️  No process on port 7687"
 
