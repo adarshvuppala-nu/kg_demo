@@ -200,11 +200,17 @@ async function ask() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
     
-    // Include conversation context for followups
+    // Include full conversation history for intelligent context understanding
     const requestBody = {
       question: question,
       conversation_id: conversationId,
-      context: messageHistory.slice(-4) // Last 4 messages for context
+      message_history: messageHistory.map(msg => ({
+        question: msg.role === 'user' ? msg.content : null,
+        answer: msg.role === 'assistant' ? msg.content : null,
+        role: msg.role,
+        content: msg.content
+      })).slice(-10), // Last 10 messages for full context
+      context: messageHistory.slice(-10) // Also send as context for backward compatibility
     };
     
     const response = await fetch(API_URL, {

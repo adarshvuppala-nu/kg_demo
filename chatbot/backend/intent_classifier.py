@@ -18,6 +18,10 @@ else:
 
 def classify_intent(question: str, context: Optional[dict] = None) -> Tuple[str, dict]:
     """
+    Classify user intent using intelligent pattern matching and context.
+    More conversational and context-aware.
+    """
+    """
     Classify the intent of a question.
     Returns: (intent_type, intent_data)
     
@@ -67,18 +71,46 @@ def classify_intent(question: str, context: Optional[dict] = None) -> Tuple[str,
             else:
                 return "conversational", {"type": "greeting" if any(p in question_lower for p in ["hello", "hi", "hey"]) else "general"}
     
-    # Use LLM for ambiguous cases
+    # Use LLM for intelligent intent classification with full context
     try:
-        prompt = f"""Classify this question as one of:
-- "data_query": Needs database query (e.g., "What is the price of MSFT?")
-- "conversational": General chat (e.g., "thanks", "are you sure")
-- "clarification": Asking about previous answer (e.g., "what do you mean?")
-- "confirmation": Asking for confirmation (e.g., "are you sure?")
+        # Build context summary from message history
+        context_summary = ""
+        if context:
+            if context.get('recent_messages') or context.get('message_history'):
+                recent = (context.get('recent_messages') or context.get('message_history', []))[-3:]  # Last 3 messages
+                if recent:
+                    context_summary = "\nRecent conversation:\n"
+                    for msg in recent:
+                        q = msg.get('question', msg.get('content', ''))
+                        a = msg.get('answer', '')[:100] if msg.get('answer') else ''
+                        if q:
+                            context_summary += f"  User: {q}\n"
+                        if a:
+                            context_summary += f"  Bot: {a}...\n"
+            
+            if context.get('recent_symbols'):
+                context_summary += f"\nRecently discussed companies: {', '.join(context.get('recent_symbols', []))}"
+            
+            if context.get('recent_topics'):
+                context_summary += f"\nRecent topics: {', '.join(context.get('recent_topics', []))}"
+        
+        prompt = f"""You are an intelligent intent classifier for a GraphRAG stock market chatbot.
 
-Question: {question}
-Context: {context.get('last_answer', 'No previous answer') if context else 'No context'}
+Classify this question as one of:
+- "data_query": Needs database query - ALMOST ALL questions should be this (e.g., "What is the price of MSFT?", "Compare Microsoft to Apple", "what factors is it using", "what companies are in the database", "what is a stock" - even general questions should try to find data first)
+- "conversational": ONLY pure greetings/thanks (e.g., "hello", "hi", "thanks", "thank you")
 
-Respond with ONLY the intent type (data_query, conversational, clarification, or confirmation):"""
+Current Question: {question}
+{context_summary}
+
+IMPORTANT: 
+- This is a GraphRAG chatbot - it should ALWAYS try to query the database first
+- Even general questions like "what is a stock" should be "data_query" (we'll try to find relevant data)
+- ONLY pure greetings/thanks should be "conversational"
+- Questions about "what factors", "how", "why" are "data_query"
+- Questions about companies, stocks, prices are "data_query"
+
+Respond with ONLY the intent type (data_query or conversational):"""
         
         resp = client.chat.completions.create(
             model="gpt-4o-mini",

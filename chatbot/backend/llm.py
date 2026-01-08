@@ -25,15 +25,17 @@ else:
 # Cache for common query patterns
 QUERY_CACHE = {}
 
-def explain(question: str, data: list, query: Optional[str] = None) -> str:
+def explain(question: str, data: list, query: Optional[str] = None, query_type: str = "general", context: Optional[dict] = None) -> str:
     """
     Generate a natural language explanation using OpenAI.
-    Enhanced with query-type detection for better responses.
+    Enhanced with query-type detection and context awareness for better responses.
     
     Args:
         question: Original user question
         data: Query results (list of dicts)
         query: Cypher query that generated the data (optional, for query type detection)
+        query_type: Type of query (general, trend, comparison, correlation, similarity, etc.)
+        context: Optional conversation context for better understanding
     
     Returns:
         Natural language answer
@@ -67,11 +69,12 @@ def explain(question: str, data: list, query: Optional[str] = None) -> str:
         return "Unable to generate explanation (OpenAI API not configured)."
     
     try:
-        # Detect query type for appropriate prompt
-        query_type = detect_query_type(question, query or "")
+        # Use provided query_type or detect it
+        if query_type == "general":
+            query_type = detect_query_type(question, query or "")
         
-        # Use enhanced QA prompt based on query type
-        prompt = get_qa_prompt(question, data, query_type)
+        # Use enhanced QA prompt based on query type with context
+        prompt = get_qa_prompt(question, data, query_type, context=context)
         
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -123,8 +126,8 @@ def generate_cypher_query(question: str, schema_prompt: str, context: Optional[d
         if context and context.get('last_symbol'):
             context_hint = f"\nContext: Previous question was about {context.get('last_symbol')}. If question doesn't specify symbol, use {context.get('last_symbol')}."
         
-        # Use schema-safe prompt from prompts module
-        prompt = get_cypher_generation_prompt(question, use_extended=True)
+        # Use schema-safe prompt from prompts module with full context
+        prompt = get_cypher_generation_prompt(question, use_extended=True, context=context)
         if context_hint:
             prompt += f"\n\nAdditional Context: {context_hint}"
         
@@ -180,19 +183,43 @@ def generate_cypher_query(question: str, schema_prompt: str, context: Optional[d
 def extract_query_parameters(question: str, query: str, context: Optional[dict] = None) -> dict:
     """
     Extract parameters needed for the Cypher query from the question.
-    Optimized with faster regex and context reuse.
+    Production-ready with robust extraction and context handling.
     """
     params = {}
     
     # Extract symbol if $symbol is in query
     if '$symbol' in query:
         symbol = extract_symbol_from_question(question)
+        
         # Use context symbol if question doesn't have one (followup)
-        if not symbol and context and context.get('last_symbol'):
-            symbol = context.get('last_symbol')
-            logger.info(f"Using context symbol: {symbol}")
+        if not symbol and context:
+            # Try multiple context sources
+            symbol = context.get('last_symbol') or context.get('extracted_symbol')
+            if symbol:
+                logger.info(f"Using context symbol: {symbol}")
+        
+        # If still no symbol, try to extract from recent messages
+        if not symbol and context and context.get('recent_symbols'):
+            recent_symbols = context.get('recent_symbols', [])
+            if recent_symbols:
+                symbol = recent_symbols[0]  # Use most recent
+                logger.info(f"Using recent symbol from context: {symbol}")
+        
         if symbol:
             params['symbol'] = symbol
+        else:
+            logger.warning(f"Could not extract symbol for query: {query[:100]}")
+    
+    # Extract year if $year is in query
+    if '$year' in query:
+        import re
+        year_match = re.search(r'\b(20\d{2})\b', question)
+        if year_match:
+            params['year'] = int(year_match.group(1))
+        elif context and context.get('last_query_type') == 'trend':
+            # Use current year as default for trends
+            from datetime import datetime
+            params['year'] = datetime.now().year
     
     return params
 

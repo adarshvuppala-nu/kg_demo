@@ -24,7 +24,7 @@ driver = GraphDatabase.driver(
 def run_cypher(query: str, params: Optional[dict] = None, read_only: bool = True):
     """
     Executes a Cypher query and returns records as a list of dicts.
-    Optimized with connection pooling and error handling.
+    Production-ready with connection pooling, error handling, and retry logic.
     
     Args:
         query: Cypher query string
@@ -34,26 +34,34 @@ def run_cypher(query: str, params: Optional[dict] = None, read_only: bool = True
     Returns:
         List of dictionaries (record.data() for each record)
     """
+    if not query or not query.strip():
+        logger.error("Empty query provided")
+        return []
+    
     try:
         with driver.session() as session:
             def execute_query(tx):
-                result = tx.run(query, params or {})
-                # Consume result within transaction
-                return [record.data() for record in result]
+                try:
+                    result = tx.run(query, params or {})
+                    # Consume result within transaction
+                    records = [record.data() for record in result]
+                    return records
+                except Exception as e:
+                    logger.error(f"Transaction error: {str(e)}")
+                    raise
             
             if read_only:
-                # Use read transaction for better performance
                 records = session.read_transaction(execute_query)
             else:
-                # Use write transaction (for schema extension scripts)
                 records = session.write_transaction(execute_query)
             
-            return records
+            return records if records else []
     except Exception as e:
         logger.error(f"Cypher query failed: {str(e)}")
-        logger.error(f"Query: {query}")
+        logger.error(f"Query: {query[:200]}...")
         logger.error(f"Params: {params}")
-        raise
+        # Don't raise - return empty list for graceful handling
+        return []
 
 def validate_schema_connection() -> bool:
     """

@@ -1,6 +1,6 @@
 # Extended Graph Schema for GraphRAG with Schema Safety
 # Based on langchain-neo4j pattern: strict schema enforcement
-from typing import Tuple
+from typing import Tuple, Optional
 
 # Complete schema definition (EXACT - no variations allowed)
 EXTENDED_GRAPH_SCHEMA = """Neo4j Graph Schema (STRICT - use ONLY these):
@@ -85,7 +85,7 @@ Examples:
 - Performance: MATCH (c:Company {symbol: $symbol})-[:PERFORMED_IN]->(y:Year {year: $year}) RETURN y.year, c.return_pct
 - Correlation: MATCH (c1:Company {symbol: $symbol1})-[r:CORRELATED_WITH]-(c2:Company) RETURN c2.symbol, r.correlation ORDER BY ABS(r.correlation) DESC LIMIT 5"""
 
-def get_cypher_generation_prompt(question: str, use_extended: bool = True) -> str:
+def get_cypher_generation_prompt(question: str, use_extended: bool = True, context: Optional[dict] = None) -> str:
     """
     Generate a schema-safe prompt for LLM to create Cypher query.
     Inspired by langchain-neo4j pattern with strict schema enforcement.
@@ -101,7 +101,9 @@ def get_cypher_generation_prompt(question: str, use_extended: bool = True) -> st
     question_lower = question.lower()
     is_complex = any(word in question_lower for word in [
         "outperform", "compare", "trend", "correlat", "similar", "influential",
-        "pagerank", "community", "group", "vs", "versus", "better", "worse"
+        "pagerank", "community", "group", "vs", "versus", "better", "worse",
+        "moves with", "moves together", "move with", "similar stocks", "similar companies",
+        "same group", "market segment", "important", "central"
     ])
     
     schema = EXTENDED_GRAPH_SCHEMA if (use_extended or is_complex) else GRAPH_SCHEMA
@@ -146,22 +148,29 @@ Query: MATCH (c1:Company {symbol: "AAPL"})-[:PERFORMED_IN]->(y:Year {year: 2022}
       ORDER BY r2.return_pct DESC
       LIMIT 5
 
-Example 6 - Correlation Query (Multi-hop):
-Question: "Which stocks are most correlated with TSLA?"
+Example 6 - Correlation Query (CORRELATED_WITH):
+Question: "Which stocks are most correlated with TSLA?" OR "What stocks move with TSLA?"
 Query: MATCH (c1:Company {symbol: $symbol})-[r:CORRELATED_WITH]-(c2:Company)
       RETURN c2.symbol, r.correlation
       ORDER BY ABS(r.correlation) DESC
       LIMIT 5
 
-Example 10 - GDS Similarity Query:
-Question: "Which companies are similar to AAPL?"
+Example 6b - Stocks That Move Together (GDS Similarity):
+Question: "Which stocks moves with MSFT?" OR "What stocks move together with Microsoft?" OR "Which stocks moves with Apple?"
 Query: MATCH (c1:Company {symbol: $symbol})-[r:GDS_SIMILAR]-(c2:Company)
-      RETURN c2.symbol, r.score
+      RETURN c2.symbol AS similar_stock, r.score AS similarity_score
+      ORDER BY r.score DESC
+      LIMIT 5
+
+Example 10 - GDS Similarity Query:
+Question: "Which companies are similar to AAPL?" OR "Find similar stocks to Apple" OR "Which stocks are similar to Microsoft?"
+Query: MATCH (c1:Company {symbol: $symbol})-[r:GDS_SIMILAR]-(c2:Company)
+      RETURN c2.symbol AS similar_stock, r.score AS similarity_score
       ORDER BY r.score DESC
       LIMIT 5
 
 Example 11 - PageRank Query:
-Question: "What are the most influential companies?" OR "Top 3 companies by PageRank"
+Question: "What are the most influential companies?" OR "Top 3 companies by PageRank" OR "Most important stocks"
 Query: MATCH (c:Company)
       WHERE c.pagerank IS NOT NULL
       RETURN c.symbol, c.pagerank
@@ -169,7 +178,7 @@ Query: MATCH (c:Company)
       LIMIT 3
 
 Example 12 - Community Query:
-Question: "What companies are in the same group as MSFT?"
+Question: "What companies are in the same group as MSFT?" OR "Which stocks are in MSFT's market segment?"
 Query: MATCH (c1:Company {symbol: $symbol})
       WHERE c1.community IS NOT NULL
       MATCH (c2:Company)
@@ -198,13 +207,43 @@ Query: MATCH (c:Company {symbol: $symbol})-[:PERFORMED_IN]->(y:Year)
       ORDER BY y.year
 """
     
-    return f"""You are a Cypher query generator for a Neo4j stock price knowledge graph.
+    # Build intelligent context from conversation history
+    context_hint = ""
+    if context:
+        # Add recent conversation history
+        if context.get('message_history'):
+            recent = context.get('message_history', [])[-3:]  # Last 3 messages
+            if recent:
+                context_hint = "\n\nCONVERSATION CONTEXT:\n"
+                for msg in recent:
+                    q = msg.get('question', msg.get('content', ''))
+                    a = msg.get('answer', '')
+                    if q:
+                        context_hint += f"User asked: {q}\n"
+                    if a:
+                        context_hint += f"Bot answered: {a[:80]}...\n"
+        
+        # Add recently discussed symbols
+        if context.get('recent_symbols'):
+            context_hint += f"\nRecently discussed companies: {', '.join(context.get('recent_symbols', []))}"
+        
+        # Add last symbol for follow-ups
+        if context.get('last_symbol'):
+            context_hint += f"\nLast symbol mentioned: {context.get('last_symbol')}"
+        
+        # Add recent topics
+        if context.get('recent_topics'):
+            context_hint += f"\nRecent conversation topics: {', '.join(context.get('recent_topics', []))}"
+    
+    return f"""You are an intelligent Cypher query generator for a Neo4j stock price knowledge graph.
+You understand conversation context and can generate appropriate queries based on what was discussed before.
 
 {schema}
 
 {few_shot_examples}
 
 User Question: {question}
+{context_hint}
 
 CRITICAL RULES:
 1. Return ONLY a valid Cypher query, no explanations, no markdown code blocks, no backticks
@@ -212,37 +251,65 @@ CRITICAL RULES:
 3. For multi-hop queries, use multiple MATCH clauses connected by relationships
 4. For temporal queries, use time dimension nodes (Year, Quarter, Month) via IN_YEAR, IN_QUARTER, IN_MONTH
 5. For comparisons, use PERFORMED_IN relationships to Year nodes
-6. For correlations, use CORRELATED_WITH relationships between Company nodes
-7. ALWAYS use $symbol parameter (do NOT hardcode symbol values unless absolutely necessary)
-8. If the question cannot be answered with the schema, return: "INVALID_QUESTION"
-9. Follow the examples above for query structure
-10. For trends over time, use aggregation functions (AVG, MIN, MAX) with GROUP BY
+6. For correlations or "moves with" questions, use CORRELATED_WITH relationships between Company nodes
+7. For similarity or "similar stocks" questions, use GDS_SIMILAR relationships (NOT CORRELATED_WITH)
+8. For "moves with", "moves together", "similar stocks" questions, prefer GDS_SIMILAR over CORRELATED_WITH
+9. For PageRank questions ("influential", "important", "central"), use Company.pagerank property
+10. For community/group questions, use Company.community property
+11. ALWAYS use $symbol parameter (do NOT hardcode symbol values unless absolutely necessary)
+12. If the question cannot be answered with the schema, return: "INVALID_QUESTION"
+13. Follow the examples above for query structure
+14. For trends over time, use aggregation functions (AVG, MIN, MAX) with GROUP BY
 
 Generate the Cypher query now:"""
 
-def get_qa_prompt(question: str, data: list, query_type: str = "general") -> str:
+def get_qa_prompt(question: str, data: list, query_type: str = "general", context: Optional[dict] = None) -> str:
     """
     Generate a prompt for LLM to convert query results into natural language.
     Enhanced for different query types (trends, comparisons, correlations).
+    Now includes conversation context for better understanding.
     
     Args:
         question: Original user question
         data: Query results (list of dicts)
         query_type: Type of query (general, trend, comparison, correlation)
+        context: Optional conversation context
     
     Returns:
         Prompt string for LLM
     """
-    base_prompt = f"""You are a financial data analyst. Answer the user's question using ONLY the provided data from Neo4j graph database.
+    # Build context hint if available
+    context_hint = ""
+    if context:
+        if context.get('last_question'):
+            context_hint += f"\nPrevious question: {context.get('last_question')}"
+        if context.get('last_answer'):
+            context_hint += f"\nPrevious answer summary: {context.get('last_answer')[:100]}..."
+        if context.get('extracted_symbol'):
+            context_hint += f"\nCompany mentioned: {context.get('extracted_symbol')}"
+    
+    base_prompt = f"""You are a helpful, intelligent, and conversational financial assistant chatbot. Answer the user's question using ONLY the provided data from Neo4j GraphRAG.
 
-CRITICAL: You MUST use ONLY the data provided below. Do NOT use any external knowledge or make up numbers.
+CRITICAL: You MUST use ONLY the data provided below. Do NOT use external knowledge or make up numbers.
 
 User Question: {question}
+{context_hint}
 
 Data from Neo4j GraphRAG query (this is the ONLY data you can use):
 {data}
 
-Instructions:"""
+Instructions:
+- Be conversational, friendly, and helpful (like ChatGPT) BUT use ONLY the provided data
+- If data is missing or shows None, explain what that means based on the data structure
+- If the question asks "what factors" or "how", explain based on what the data shows
+- If data shows None values, explain that the data is not available in the database
+- Reference previous conversation naturally when relevant
+- Format numbers clearly (prices with $, percentages with %)
+- Be concise but informative
+- DO NOT invent or estimate numbers - use only what's in the data
+- If data is empty or all None, explain that clearly
+
+Answer:"""
     
     if query_type == "trend":
         return f"""{base_prompt}
@@ -291,15 +358,18 @@ Instructions:"""
     
     else:
         return f"""{base_prompt}
-- Answer the question directly using ONLY the data provided above
-- Include specific numbers (prices, dates, volumes) from the data
-- Do NOT invent or estimate any numbers - use only what's in the data
-- Be concise and accurate
-- If data is empty, say "No data found for this query"
-- Format dates as YYYY-MM-DD
-- Format prices with $ symbol and 2 decimal places
+- Answer like ChatGPT - naturally, intelligently, and conversationally BUT use ONLY the provided data
+- If data is missing or shows None, explain that the data is not available in the database
+- If the question asks "what factors" or "how", explain based on what the data structure shows
+- If data is empty or all None, explain clearly that the data is not available
+- Include specific numbers from data when available (prices with $, dates as YYYY-MM-DD)
+- Reference previous conversation naturally
+- Be helpful and informative - explain what the data shows, even if it's None
+- DO NOT make up numbers or use external knowledge
+- Format everything clearly and professionally
+- If return_pct is None, explain that performance data is not available in the database
 
-Answer (using ONLY the provided data):"""
+Answer (be intelligent, conversational, and helpful, but use ONLY the provided data):"""
 
 def validate_cypher_query(query: str) -> Tuple[bool, str]:
     """
@@ -392,9 +462,13 @@ def detect_query_type(question: str, query: str) -> str:
     if any(word in question_lower for word in ["compare", "vs", "versus", "better", "outperform", "difference", "worse", "beaten"]):
         return "comparison"
     
-    # Correlation indicators
-    if any(word in question_lower for word in ["correlat", "move together", "relationship between", "most correlated"]):
+    # Correlation indicators (but prefer GDS_SIMILAR for "moves with")
+    if any(word in question_lower for word in ["correlat", "relationship between", "most correlated"]):
         return "correlation"
+    
+    # GDS Similarity indicators (for "moves with", "similar stocks")
+    if any(word in question_lower for word in ["moves with", "moves together", "move with", "similar stocks", "similar companies"]):
+        return "similarity"
     
     # Check query structure
     if "CORRELATED_WITH" in query_upper:

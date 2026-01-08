@@ -99,7 +99,7 @@ WITH c1, c2, daily_returns, mean1, mean2,
      SQRT(REDUCE(sum1 = 0.0, r IN daily_returns | sum1 + (r.return1 - mean1)^2)) AS std1,
      SQRT(REDUCE(sum2 = 0.0, r IN daily_returns | sum2 + (r.return2 - mean2)^2)) AS std2
 WHERE std1 > 0 AND std2 > 0
-WITH c1, c2, (numerator / (std1 * std2)) AS correlation
+WITH c1, c2, daily_returns, (numerator / (std1 * std2)) AS correlation
 WHERE ABS(correlation) >= 0.3  // Only store meaningful correlations
 MERGE (c1)-[r:CORRELATED_WITH {correlation: correlation, sample_size: SIZE(daily_returns)}]-(c2)
 RETURN COUNT(r) AS correlation_rels;
