@@ -106,6 +106,9 @@ kg_demo/
 │   │   ├── explore_n10s_ontology.py  # n10s exploration script
 │   │   ├── explore_ontop.py         # Ontop exploration script
 │   │   ├── test_gds_insights.py      # GDS testing script
+│   │   ├── load_companies_to_neo4j.py # Companies metadata loader
+│   │   ├── graph_visualization_queries.cypher # Neo4j visualization queries
+│   │   ├── n10s_visualization_queries.cypher # n10s visualization queries
 │   │   ├── install_gds_docker.sh     # GDS installation script
 │   │   ├── install_n10s_docker.sh    # n10s installation script
 │   │   ├── install_n10s_neo4j_5.18.sh # n10s for Neo4j 5.18
@@ -275,6 +278,45 @@ kg_demo/
 **Usage**: `python load_schema_extension.py`
 
 **Note**: Requires `schema_extension.cypher` file
+
+---
+
+#### `load_companies_to_neo4j.py`
+**Purpose**: Load company metadata (sector, location, employees, market cap) from Postgres to Neo4j
+
+**Process**:
+1. Connects to Postgres and reads `companies` table (502 companies)
+2. Enriches existing Company nodes with:
+   - `sector` (Technology, Financial Services, Healthcare, etc.)
+   - `fulltimeemployees` (number of employees)
+   - `marketcap` (market capitalization)
+3. Creates new nodes:
+   - `Sector` nodes (11 sectors)
+   - `Country` nodes (8 countries)
+   - `State` nodes (41 states)
+   - `City` nodes (233 cities)
+4. Creates relationships:
+   - `IN_SECTOR`, `LOCATED_IN`, `IN_STATE`, `IN_CITY`
+   - Location hierarchy: `City → State → Country`
+
+**Output**:
+- 11 Sector nodes
+- 8 Country nodes
+- 41 State nodes
+- 233 City nodes
+- 10 Company nodes enriched (the ones with stock price data)
+
+**Usage**: `python load_companies_to_neo4j.py`
+
+**Requirements**: 
+- PostgreSQL `companies` table must exist
+- Neo4j Company nodes must exist (from `load_data_to_neo4j.py`)
+
+**New Capabilities**:
+- Query companies by sector
+- Find companies in same sector
+- Sector-based GDS analysis
+- Location-based queries
 
 ---
 
@@ -653,7 +695,14 @@ python gds_setup.py
 
 **Output**: GDS_SIMILAR relationships, PageRank, Community, Embeddings
 
-### Step 6: Import Ontology (Optional)
+### Step 6: Load Companies Metadata (Optional but Recommended)
+```bash
+python load_companies_to_neo4j.py
+```
+
+**Output**: Sector, Country, State, City nodes and relationships
+
+### Step 7: Import Ontology (Optional)
 ```bash
 python import_n10s_ontology.py
 ```
@@ -667,9 +716,9 @@ python import_n10s_ontology.py
 ### Node Types
 
 1. **Company**
-   - Properties: `symbol` (String)
+   - Properties: `symbol` (String), `sector` (String), `fulltimeemployees` (Integer), `marketcap` (Float)
    - GDS Properties: `pagerank` (Float), `community` (Integer), `embedding` (List<Float>)
-   - Count: 10
+   - Count: 10 (with stock data), 502 total in companies table
 
 2. **PriceDay**
    - Properties: `date` (Date), `open` (Float), `high` (Float), `low` (Float), `close` (Float), `adj_close` (Float), `volume` (Integer)
@@ -686,6 +735,22 @@ python import_n10s_ontology.py
 5. **Month**
    - Properties: `year` (Integer), `month` (Integer)
    - Count: 193
+
+6. **Sector**
+   - Properties: `name` (String)
+   - Count: 11 (Technology, Financial Services, Healthcare, etc.)
+
+7. **Country**
+   - Properties: `name` (String)
+   - Count: 8
+
+8. **State**
+   - Properties: `name` (String), `country` (String)
+   - Count: 41
+
+9. **City**
+   - Properties: `name` (String), `state` (String), `country` (String)
+   - Count: 233
 
 ### Relationship Types
 
@@ -716,6 +781,26 @@ python import_n10s_ontology.py
 7. **GDS_SIMILAR**
    - `(:Company)-[:GDS_SIMILAR {score: Float}]-(:Company)`
    - Count: 100 (from GDS Node Similarity, top-K=5)
+
+8. **IN_SECTOR**
+   - `(:Company)-[:IN_SECTOR]->(:Sector)`
+   - Count: 10 (companies with stock data)
+
+9. **LOCATED_IN**
+   - `(:Company)-[:LOCATED_IN]->(:Country)`
+   - Count: 10
+
+10. **IN_STATE**
+    - `(:Company)-[:IN_STATE]->(:State)`
+    - Count: 10
+
+11. **IN_CITY**
+    - `(:Company)-[:IN_CITY]->(:City)`
+    - Count: 10
+
+12. **IN_COUNTRY**
+    - `(:State)-[:IN_COUNTRY]->(:Country)`
+    - Count: 41
 
 ### Constraints & Indexes
 
@@ -1088,6 +1173,11 @@ python -m http.server 8080
    - "What are the most influential companies?"
    - "What companies are in the same group as MSFT?"
 
+5. **Sector Queries** (after companies data loaded):
+   - "What sector does Apple belong to?"
+   - "What other companies are in Technology sector?"
+   - "Which companies in same sector as Apple move together?"
+
 5. **Follow-up Questions**:
    - "What about NVDA?"
    - "Show me the price" (uses context)
@@ -1109,6 +1199,20 @@ curl -X POST http://localhost:8000/chat \
   -d '{"question": "What is the latest price of MSFT?"}'
 ```
 
+**Test Sector Queries**:
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What sector does Apple belong to?"}'
+
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Which companies in same sector as Apple move together?"}'
+```
+
+**Graph Visualizations**:
+Run queries from `graph_visualization_queries.cypher` in Neo4j Browser for beautiful graph visualizations.
+
 ---
 
 ## What's Next
@@ -1123,6 +1227,10 @@ curl -X POST http://localhost:8000/chat \
 - [x] n10s integration (RDF/OWL ontology)
 - [x] Frontend chatbot UI
 - [x] Schema safety enforcement
+- [x] Companies metadata loading (sector, location, employees, market cap)
+- [x] Sector-based queries and GDS analysis
+- [x] Graph visualization queries
+- [x] Production-ready chatbot with explanation question handling
 
 ### In Progress / Partial ⏳
 
@@ -1227,7 +1335,30 @@ This project demonstrates a complete **GraphRAG system** for stock market data:
 
 ---
 
-**Last Updated**: 2026-01-06
-**Version**: 1.0.0
+**Last Updated**: 2026-01-07
+**Version**: 2.0.0
 **Author**: GraphRAG Stock Market Knowledge Graph Project
+
+---
+
+## Recent Updates (v2.0.0)
+
+### Companies Data Integration
+- ✅ Loaded 502 companies from Postgres `companies` table
+- ✅ Enriched Company nodes with sector, location, employees, market cap
+- ✅ Created Sector, Country, State, City nodes and relationships
+- ✅ Enabled sector-based queries and GDS analysis
+
+### Production-Ready Chatbot
+- ✅ Added explanation question detection ("how is that calculated")
+- ✅ Added methodology explanation for GDS algorithms
+- ✅ Improved follow-up question handling
+- ✅ Enhanced error handling with retry logic
+- ✅ Better context management and conversation flow
+
+### Graph Visualizations
+- ✅ Created `graph_visualization_queries.cypher` with 10 visualization queries
+- ✅ Sector-based network visualizations
+- ✅ Cross-sector similarity visualizations
+- ✅ Complete company network with all relationships
 

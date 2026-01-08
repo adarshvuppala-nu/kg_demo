@@ -6,11 +6,15 @@ from typing import Tuple, Optional
 EXTENDED_GRAPH_SCHEMA = """Neo4j Graph Schema (STRICT - use ONLY these):
 
 NODE TYPES:
-1. Company {symbol: String}
+1. Company {symbol: String, sector: String, fulltimeemployees: Integer, marketcap: Float}
 2. PriceDay {date: Date, open: Float, high: Float, low: Float, close: Float, adj_close: Float, volume: Integer}
 3. Year {year: Integer}
 4. Quarter {year: Integer, quarter: Integer}
 5. Month {year: Integer, month: Integer}
+6. Sector {name: String}
+7. Country {name: String}
+8. State {name: String, country: String}
+9. City {name: String, state: String, country: String}
 
 RELATIONSHIP TYPES (EXACT):
 1. (:Company)-[:HAS_PRICE]->(:PriceDay)
@@ -20,10 +24,16 @@ RELATIONSHIP TYPES (EXACT):
 5. (:Company)-[:PERFORMED_IN {return_pct: Float, start_price: Float, end_price: Float}]->(:Year)
 6. (:Company)-[:CORRELATED_WITH {correlation: Float, sample_size: Integer}]-(:Company)
 7. (:Company)-[:GDS_SIMILAR {score: Float}]-(:Company)  // GDS Node Similarity
+8. (:Company)-[:IN_SECTOR]->(:Sector)
+9. (:Company)-[:LOCATED_IN]->(:Country)
+10. (:Company)-[:IN_STATE]->(:State)
+11. (:Company)-[:IN_CITY]->(:City)
+12. (:State)-[:IN_COUNTRY]->(:Country)
+13. (:City)-[:IN_STATE]->(:State)
 
 SCHEMA RULES (MANDATORY):
-- ONLY use the 5 node types listed above
-- ONLY use the 7 relationship types listed above (includes GDS_SIMILAR)
+- ONLY use the 9 node types listed above
+- ONLY use the 13 relationship types listed above (includes GDS_SIMILAR)
 - NEVER invent new node labels or relationship types
 - ALWAYS use parameters: $symbol, $year, $date, etc.
 - Date format: Use date() function or date literals like date('2022-01-01')
@@ -59,6 +69,28 @@ RETURN q.quarter, avg_price ORDER BY q.quarter
 MATCH (c1:Company {symbol: $symbol1})-[:PERFORMED_IN]->(y:Year {year: $year})
 MATCH (c2:Company {symbol: $symbol2})-[:PERFORMED_IN]->(y)
 RETURN c1.symbol, c1.return_pct, c2.symbol, c2.return_pct
+
+7. Sector query:
+MATCH (c:Company)-[:IN_SECTOR]->(s:Sector {name: $sector})
+RETURN c.symbol, c.sector ORDER BY c.symbol
+
+8. Companies in same sector:
+MATCH (c1:Company {symbol: $symbol})-[:IN_SECTOR]->(s:Sector)
+MATCH (c2:Company)-[:IN_SECTOR]->(s)
+WHERE c1 <> c2
+RETURN c2.symbol, c2.sector
+
+9. Sector-based similarity:
+MATCH (c1:Company {symbol: $symbol})-[:IN_SECTOR]->(s:Sector)
+MATCH (c2:Company)-[:IN_SECTOR]->(s)
+MATCH (c1)-[r:GDS_SIMILAR]-(c2)
+WHERE c1 <> c2
+RETURN c2.symbol, r.score, c2.sector
+ORDER BY r.score DESC LIMIT 5
+
+10. Company sector:
+MATCH (c:Company {symbol: $symbol})-[:IN_SECTOR]->(s:Sector)
+RETURN c.symbol, s.name AS sector
 
 INVALID (DO NOT USE):
 - Any node label not in the 5 types above
@@ -103,7 +135,8 @@ def get_cypher_generation_prompt(question: str, use_extended: bool = True, conte
         "outperform", "compare", "trend", "correlat", "similar", "influential",
         "pagerank", "community", "group", "vs", "versus", "better", "worse",
         "moves with", "moves together", "move with", "similar stocks", "similar companies",
-        "same group", "market segment", "important", "central"
+        "same group", "market segment", "important", "central",
+        "sector", "industry", "belong to", "same sector", "which sector", "what sector"
     ])
     
     schema = EXTENDED_GRAPH_SCHEMA if (use_extended or is_complex) else GRAPH_SCHEMA
@@ -159,6 +192,30 @@ Example 6b - Stocks That Move Together (GDS Similarity):
 Question: "Which stocks moves with MSFT?" OR "What stocks move together with Microsoft?" OR "Which stocks moves with Apple?"
 Query: MATCH (c1:Company {symbol: $symbol})-[r:GDS_SIMILAR]-(c2:Company)
       RETURN c2.symbol AS similar_stock, r.score AS similarity_score
+      ORDER BY r.score DESC
+      LIMIT 5
+
+Example 7 - Sector Query:
+Question: "What sector does Apple belong to?" OR "Which sector is AAPL in?"
+Query: MATCH (c:Company {symbol: $symbol})-[:IN_SECTOR]->(s:Sector)
+      RETURN c.symbol, s.name AS sector
+
+Example 8 - Companies in Same Sector:
+Question: "What other companies are in the same sector as Apple?" OR "Which companies are in Technology sector?"
+Query: MATCH (c1:Company {symbol: $symbol})-[:IN_SECTOR]->(s:Sector)
+      MATCH (c2:Company)-[:IN_SECTOR]->(s)
+      WHERE c1 <> c2
+      RETURN c2.symbol, s.name AS sector
+      ORDER BY c2.symbol
+      LIMIT 10
+
+Example 9 - Sector-Based Similarity:
+Question: "Which companies in the same sector as Apple move together?" OR "What Technology companies move with Apple?"
+Query: MATCH (c1:Company {symbol: $symbol})-[:IN_SECTOR]->(s:Sector)
+      MATCH (c2:Company)-[:IN_SECTOR]->(s)
+      MATCH (c1)-[r:GDS_SIMILAR]-(c2)
+      WHERE c1 <> c2
+      RETURN c2.symbol, r.score AS similarity_score, s.name AS sector
       ORDER BY r.score DESC
       LIMIT 5
 
@@ -256,9 +313,12 @@ CRITICAL RULES:
 8. For "moves with", "moves together", "similar stocks" questions, prefer GDS_SIMILAR over CORRELATED_WITH
 9. For PageRank questions ("influential", "important", "central"), use Company.pagerank property
 10. For community/group questions, use Company.community property
-11. ALWAYS use $symbol parameter (do NOT hardcode symbol values unless absolutely necessary)
-12. If the question cannot be answered with the schema, return: "INVALID_QUESTION"
-13. Follow the examples above for query structure
+11. For sector questions ("what sector", "which sector", "same sector"), use IN_SECTOR relationship
+12. For companies in same sector, match both companies to the same Sector node
+13. For sector-based similarity, combine IN_SECTOR with GDS_SIMILAR relationships
+14. ALWAYS use $symbol parameter (do NOT hardcode symbol values unless absolutely necessary)
+15. If the question cannot be answered with the schema, return: "INVALID_QUESTION"
+16. Follow the examples above for query structure
 14. For trends over time, use aggregation functions (AVG, MIN, MAX) with GROUP BY
 
 Generate the Cypher query now:"""
@@ -379,11 +439,12 @@ def validate_cypher_query(query: str) -> Tuple[bool, str]:
     query_upper = query.upper()
     
     # Allowed node labels
-    allowed_nodes = ["COMPANY", "PRICEDAY", "YEAR", "QUARTER", "MONTH"]
+    allowed_nodes = ["COMPANY", "PRICEDAY", "YEAR", "QUARTER", "MONTH", "SECTOR", "COUNTRY", "STATE", "CITY"]
     
     # Allowed relationships
     allowed_rels = ["HAS_PRICE", "IN_YEAR", "IN_QUARTER", "IN_MONTH", 
-                    "PERFORMED_IN", "CORRELATED_WITH", "GDS_SIMILAR"]
+                    "PERFORMED_IN", "CORRELATED_WITH", "GDS_SIMILAR",
+                    "IN_SECTOR", "LOCATED_IN", "IN_STATE", "IN_CITY", "IN_COUNTRY"]
     
     # Check for forbidden operations
     forbidden_ops = ["CREATE", "MERGE", "DELETE", "SET", "REMOVE", "DETACH DELETE"]
