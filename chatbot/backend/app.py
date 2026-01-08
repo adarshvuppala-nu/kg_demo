@@ -537,20 +537,41 @@ def _explain_methodology(question: str, context: dict) -> Optional[str]:
     methodology_info = ""
     
     if 'GDS_SIMILAR' in last_query or last_query_type == 'similarity':
-        methodology_info = """
+        # Get actual data used for explanation
+        last_data = context.get('last_data', [])
+        sample_data = last_data[:3] if last_data else []
+        
+        # Build data-specific explanation
+        data_details = ""
+        if sample_data:
+            data_details = "\n\nSpecific data used:\n"
+            for item in sample_data:
+                symbol = item.get('c2.symbol') or item.get('symbol') or item.get('company', 'N/A')
+                score = item.get('r.score') or item.get('score') or item.get('similarity_score', 'N/A')
+                data_details += f"- {symbol}: similarity score {score}\n"
+        
+        methodology_info = f"""
 The similarity scores are calculated using Neo4j Graph Data Science (GDS) Node Similarity algorithm.
 
-How it works:
-1. The algorithm analyzes the graph structure and relationships between companies
-2. It uses the GDS_SIMILAR relationships which were created by running the Node Similarity algorithm
-3. The similarity score (0.0 to 1.0) indicates how similar two companies are based on their graph connections
-4. Higher scores (closer to 1.0) mean companies are more similar in their market behavior
-5. The algorithm considers factors like:
-   - Shared relationships in the graph
-   - Common patterns in stock price movements
-   - Structural similarities in the knowledge graph
+What data was used:
+1. The algorithm analyzed CORRELATED_WITH relationships between companies (based on stock price correlation)
+2. It examined the graph structure including:
+   - Company nodes with their stock price data (PriceDay nodes)
+   - CORRELATED_WITH relationships (Pearson correlation of daily returns)
+   - The correlation values and sample sizes stored in these relationships
+3. The GDS Node Similarity algorithm then computed similarity scores based on:
+   - Shared CORRELATED_WITH relationships
+   - Similar correlation patterns with other companies
+   - Graph structural similarities
 
-The scores you see (e.g., 0.78) represent the strength of similarity between companies.
+How it works:
+- The algorithm uses the 'company-graph' projection which includes all Company nodes and CORRELATED_WITH relationships
+- It compares companies based on their relationship patterns in the graph
+- Similarity scores range from 0.0 to 1.0, where higher scores indicate more similar companies
+- The scores are stored as GDS_SIMILAR relationships with a 'score' property
+
+The results you see are based on actual correlation data from stock price movements, with each correlation calculated from at least 30 common trading days.
+{data_details}
 """
     elif 'PERFORMED_IN' in last_query or last_query_type == 'comparison':
         methodology_info = """
@@ -573,24 +594,74 @@ How it works:
 4. Positive values mean stocks move together, negative means they move in opposite directions
 """
     elif 'pagerank' in last_query.lower() or last_query_type == 'pagerank':
-        methodology_info = """
+        # Get actual data used for explanation
+        last_data = context.get('last_data', [])
+        sample_data = last_data[:3] if last_data else []
+        
+        data_details = ""
+        if sample_data:
+            data_details = "\n\nSpecific data used:\n"
+            for item in sample_data:
+                symbol = item.get('c.symbol') or item.get('symbol') or item.get('company', 'N/A')
+                pr = item.get('c.pagerank') or item.get('pagerank', 'N/A')
+                data_details += f"- {symbol}: PageRank {pr}\n"
+        
+        methodology_info = f"""
 PageRank is calculated using Neo4j Graph Data Science (GDS) PageRank algorithm.
 
-How it works:
-1. PageRank measures the importance/influence of companies in the graph
-2. Companies with more connections and relationships have higher PageRank scores
-3. The algorithm considers both direct and indirect connections
-4. Higher PageRank indicates greater influence in the market network
-"""
-    elif 'community' in last_query.lower() or last_query_type == 'community':
-        methodology_info = """
-Community detection uses Neo4j Graph Data Science (GDS) Louvain algorithm.
+What data was used:
+1. The algorithm analyzed the entire company graph structure:
+   - All Company nodes and their relationships (HAS_PRICE, CORRELATED_WITH, PERFORMED_IN, etc.)
+   - The 'company-graph' projection which includes Company nodes and CORRELATED_WITH relationships
+2. PageRank scores are stored as properties on Company nodes (c.pagerank)
 
 How it works:
-1. The Louvain algorithm groups companies into communities based on graph structure
-2. Companies in the same community have similar patterns of relationships
-3. This helps identify market segments or sectors
-4. Companies in the same community often have correlated stock movements
+- PageRank measures the importance/influence of companies in the graph network
+- Companies with more connections (relationships) have higher PageRank scores
+- The algorithm considers both direct connections (e.g., CORRELATED_WITH) and indirect connections
+- Higher PageRank indicates greater influence in the market network
+- Scores are normalized and typically range from 0.0 to higher values
+
+The results are based on the actual graph structure of your data, including all relationships between companies.
+{data_details}
+"""
+    elif 'community' in last_query.lower() or last_query_type == 'community':
+        # Get actual data used for explanation
+        last_data = context.get('last_data', [])
+        sample_data = last_data[:5] if last_data else []
+        
+        data_details = ""
+        if sample_data:
+            data_details = "\n\nSpecific data used:\n"
+            communities = {}
+            for item in sample_data:
+                symbol = item.get('c.symbol') or item.get('symbol') or item.get('company', 'N/A')
+                comm = item.get('c.community') or item.get('community', 'N/A')
+                if comm not in communities:
+                    communities[comm] = []
+                communities[comm].append(symbol)
+            
+            for comm_id, symbols in communities.items():
+                data_details += f"- Community {comm_id}: {', '.join(symbols)}\n"
+        
+        methodology_info = f"""
+Community detection uses Neo4j Graph Data Science (GDS) Louvain algorithm.
+
+What data was used:
+1. The algorithm analyzed the graph structure:
+   - All Company nodes and their relationships (CORRELATED_WITH, GDS_SIMILAR, etc.)
+   - The 'company-graph' projection which includes Company nodes and CORRELATED_WITH relationships
+2. Community assignments are stored as properties on Company nodes (c.community)
+
+How it works:
+- The Louvain algorithm groups companies into communities based on graph structure
+- Companies in the same community have similar patterns of relationships
+- This helps identify market segments or sectors based on actual graph connections
+- Companies in the same community often have correlated stock movements
+- Community IDs are integers assigned by the algorithm
+
+The results are based on the actual relationship patterns in your graph data.
+{data_details}
 """
     else:
         methodology_info = f"""

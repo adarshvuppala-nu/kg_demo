@@ -319,7 +319,9 @@ CRITICAL RULES:
 14. ALWAYS use $symbol parameter (do NOT hardcode symbol values unless absolutely necessary)
 15. If the question cannot be answered with the schema, return: "INVALID_QUESTION"
 16. Follow the examples above for query structure
-14. For trends over time, use aggregation functions (AVG, MIN, MAX) with GROUP BY
+17. For trends over time, use aggregation functions (AVG, MIN, MAX) with GROUP BY
+18. **MANDATORY**: If question contains "latest", "current", "most recent", "newest", "last" price/price data, you MUST use "ORDER BY p.date DESC LIMIT 1" (NOT just "ORDER BY p.date")
+19. **MANDATORY**: For "latest price" queries, ALWAYS include "DESC LIMIT 1" to get the most recent date
 
 Generate the Cypher query now:"""
 

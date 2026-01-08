@@ -117,8 +117,12 @@ def generate_cypher_query(question: str, schema_prompt: str, context: Optional[d
         logger.info(f"Using cached query for: {question[:50]}")
         cached_query, cached_params_template = QUERY_CACHE[cache_key]
         # Re-extract parameters for this specific question
-        params = extract_query_parameters(question, cached_query)
-        return cached_query, params
+        if cached_query is None:
+            logger.warning("Cached query is None, regenerating...")
+            # Fall through to regenerate
+        else:
+            params = extract_query_parameters(question, cached_query, context)
+            return cached_query, params
     
     try:
         # Add context if available for followups
@@ -135,8 +139,16 @@ def generate_cypher_query(question: str, schema_prompt: str, context: Optional[d
         if context and context.get('message_history'):
             history = context.get('message_history', [])[-3:]  # Last 3 messages
             if history:
-                history_text = "\n".join([f"Q: {m.get('question', '')} A: {m.get('answer', '')[:50]}..." for m in history])
-                prompt += f"\n\nPrevious conversation:\n{history_text}"
+                try:
+                    history_text = "\n".join([
+                        f"Q: {m.get('question', '') if isinstance(m, dict) else ''} A: {m.get('answer', '')[:50] if isinstance(m, dict) and m.get('answer') else ''}..." 
+                        for m in history if isinstance(m, dict)
+                    ])
+                    if history_text.strip():
+                        prompt += f"\n\nPrevious conversation:\n{history_text}"
+                except Exception as e:
+                    logger.warning(f"Error processing message history: {str(e)}")
+                    # Continue without history if there's an error
         
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -155,6 +167,25 @@ def generate_cypher_query(question: str, schema_prompt: str, context: Optional[d
         
         if query.upper() == "INVALID_QUESTION":
             return None, {}
+        
+        # Post-process: Fix "latest" queries that are missing DESC LIMIT 1
+        question_lower = question.lower()
+        latest_keywords = ["latest", "current", "most recent", "newest", "last"]
+        is_latest_question = any(keyword in question_lower for keyword in latest_keywords)
+        
+        if is_latest_question and "HAS_PRICE" in query.upper():
+            # Check if query has ORDER BY but missing DESC LIMIT 1
+            if "ORDER BY" in query.upper() and "DESC" not in query.upper():
+                # Replace ORDER BY p.date with ORDER BY p.date DESC LIMIT 1
+                query = re.sub(r'ORDER BY\s+p\.date\s*$', 'ORDER BY p.date DESC LIMIT 1', query, flags=re.IGNORECASE)
+                query = re.sub(r'ORDER BY\s+p\.date\s*\n', 'ORDER BY p.date DESC LIMIT 1\n', query, flags=re.IGNORECASE)
+                if "LIMIT 1" not in query.upper():
+                    query = query.rstrip() + " DESC LIMIT 1"
+                logger.info(f"Fixed 'latest' query to include DESC LIMIT 1")
+            elif "ORDER BY" not in query.upper():
+                # Add ORDER BY p.date DESC LIMIT 1 if missing
+                query = query.rstrip().rstrip(';') + " ORDER BY p.date DESC LIMIT 1"
+                logger.info(f"Added ORDER BY p.date DESC LIMIT 1 to 'latest' query")
         
         # Validate query against schema
         is_valid, error_msg = validate_cypher_query(query)
@@ -187,6 +218,11 @@ def extract_query_parameters(question: str, query: str, context: Optional[dict] 
     """
     params = {}
     
+    # Guard against None query
+    if query is None:
+        logger.warning("Query is None in extract_query_parameters")
+        return params
+    
     # Extract symbol if $symbol is in query
     if '$symbol' in query:
         symbol = extract_symbol_from_question(question)
@@ -208,7 +244,8 @@ def extract_query_parameters(question: str, query: str, context: Optional[dict] 
         if symbol:
             params['symbol'] = symbol
         else:
-            logger.warning(f"Could not extract symbol for query: {query[:100]}")
+            query_preview = query[:100] if query else "None"
+            logger.warning(f"Could not extract symbol for query: {query_preview}")
     
     # Extract year if $year is in query
     if '$year' in query:

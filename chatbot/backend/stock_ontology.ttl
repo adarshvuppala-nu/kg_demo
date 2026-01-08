@@ -83,3 +83,77 @@
 :inMonth a owl:ObjectProperty ;
     rdfs:domain :PriceDay ;
     rdfs:range :Month .
+
+:Sector a owl:Class ;
+    rdfs:label "Sector" ;
+    rdfs:comment "A business sector or industry category" .
+
+:Country a owl:Class ;
+    rdfs:label "Country" ;
+    rdfs:comment "A country location" .
+
+:State a owl:Class ;
+    rdfs:label "State" ;
+    rdfs:comment "A state or province within a country" .
+
+:City a owl:Class ;
+    rdfs:label "City" ;
+    rdfs:comment "A city location" .
+
+:name a owl:DatatypeProperty ;
+    rdfs:domain :Sector, :Country, :State, :City ;
+    rdfs:range xsd:string .
+
+:inSector a owl:ObjectProperty ;
+    rdfs:domain :Company ;
+    rdfs:range :Sector ;
+    rdfs:label "In Sector" .
+
+:locatedIn a owl:ObjectProperty ;
+    rdfs:domain :Company ;
+    rdfs:range :Country ;
+    rdfs:label "Located In" .
+
+:inState a owl:ObjectProperty ;
+    rdfs:domain :Company, :City ;
+    rdfs:range :State ;
+    rdfs:label "In State" .
+
+:inCity a owl:ObjectProperty ;
+    rdfs:domain :Company ;
+    rdfs:range :City ;
+    rdfs:label "In City" .
+
+:inCountry a owl:ObjectProperty ;
+    rdfs:domain :State ;
+    rdfs:range :Country ;
+    rdfs:label "In Country" .
+
+:gdsSimilar a owl:ObjectProperty ;
+    rdfs:domain :Company ;
+    rdfs:range :Company ;
+    rdfs:label "GDS Similar" ;
+    rdfs:comment "Graph Data Science Node Similarity relationship" .
+
+:gdsSimilarScore a owl:DatatypeProperty ;
+    rdfs:domain :gdsSimilar ;
+    rdfs:range xsd:float ;
+    rdfs:label "GDS Similarity Score" .
+
+:pagerank a owl:DatatypeProperty ;
+    rdfs:domain :Company ;
+    rdfs:range xsd:float ;
+    rdfs:label "PageRank" ;
+    rdfs:comment "Graph Data Science PageRank centrality score" .
+
+:community a owl:DatatypeProperty ;
+    rdfs:domain :Company ;
+    rdfs:range xsd:integer ;
+    rdfs:label "Community" ;
+    rdfs:comment "Graph Data Science Louvain community detection result" .
+
+:embedding a owl:DatatypeProperty ;
+    rdfs:domain :Company ;
+    rdfs:range rdf:List ;
+    rdfs:label "Embedding" ;
+    rdfs:comment "Graph Data Science FastRP embedding vector" .

@@ -109,6 +109,10 @@ def map_nodes_to_rdf():
         ("http://kg-demo.org/stock#Year", "Year"),
         ("http://kg-demo.org/stock#Quarter", "Quarter"),
         ("http://kg-demo.org/stock#Month", "Month"),
+        ("http://kg-demo.org/stock#Sector", "Sector"),
+        ("http://kg-demo.org/stock#Country", "Country"),
+        ("http://kg-demo.org/stock#State", "State"),
+        ("http://kg-demo.org/stock#City", "City"),
     ]
     
     for rdf_class, neo4j_label in mappings:
